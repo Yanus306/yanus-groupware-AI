@@ -110,13 +110,33 @@ class TestTextExtractor:
 
         assert "PDF page content" in result
 
+    @patch("services.worker.app.extractor.DocxDocument")
+    def test_extract_docx_returns_text(self, mock_docx_document_cls):
+        """DOCX 파일에서 텍스트를 추출하는지 테스트"""
+        from services.worker.app.extractor import TextExtractor
+
+        mock_document = MagicMock()
+        mock_docx_document_cls.return_value = mock_document
+
+        paragraph_1 = MagicMock()
+        paragraph_1.text = "DOCX 제목"
+        paragraph_2 = MagicMock()
+        paragraph_2.text = "DOCX 본문"
+        mock_document.paragraphs = [paragraph_1, paragraph_2]
+
+        extractor = TextExtractor()
+        result = extractor.extract(b"fake docx bytes", "docx")
+
+        assert "DOCX 제목" in result
+        assert "DOCX 본문" in result
+
     def test_extract_unsupported_type_raises(self):
         """지원하지 않는 파일 타입 시 예외 발생 테스트"""
         from services.worker.app.extractor import TextExtractor
 
         extractor = TextExtractor()
         with pytest.raises(ValueError, match="지원하지 않는 파일 형식"):
-            extractor.extract(b"content", "docx")
+            extractor.extract(b"content", "xlsx")
 
 
 # ───────────────────────────────────────────────────
@@ -381,3 +401,51 @@ class TestWorkerAPI:
         data = response.json()
         assert "status" in data
         assert data["status"] == "ok"
+
+    @patch("services.worker.app.extractor.DocxDocument")
+    @patch("services.worker.app.embedder.SentenceTransformer")
+    @patch("services.worker.app.indexer.QdrantClient")
+    @patch("services.worker.app.loader.Minio")
+    def test_ingest_endpoint_processes_docx(
+        self,
+        mock_minio_cls,
+        mock_qdrant_cls,
+        mock_st_cls,
+        mock_docx_document_cls,
+    ):
+        """POST /ingest가 DOCX 파일도 처리하는지 테스트"""
+        import numpy as np
+
+        mock_minio = MagicMock()
+        mock_minio_cls.return_value = mock_minio
+
+        mock_obj = MagicMock()
+        mock_obj.object_name = "test.docx"
+        mock_minio.list_objects.return_value = [mock_obj]
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"fake docx bytes"
+        mock_minio.get_object.return_value = mock_response
+
+        mock_document = MagicMock()
+        paragraph = MagicMock()
+        paragraph.text = "DOCX 문서 내용"
+        mock_document.paragraphs = [paragraph]
+        mock_docx_document_cls.return_value = mock_document
+
+        mock_model = MagicMock()
+        mock_st_cls.return_value = mock_model
+        mock_model.encode.return_value = np.zeros((1, 1024))
+
+        mock_qdrant = MagicMock()
+        mock_qdrant_cls.return_value = mock_qdrant
+        mock_qdrant.collection_exists.return_value = True
+
+        from services.worker.app.main import app
+        client = TestClient(app)
+        response = client.post("/ingest")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["processed"] == 1
+        mock_qdrant.upsert.assert_called_once()
