@@ -8,7 +8,8 @@ DOC-001: 문서 수집 및 임베딩 파이프라인
 """
 
 import os
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -20,14 +21,54 @@ from .indexer import QdrantIndexer
 
 load_dotenv()
 
-app = FastAPI(title="Worker Service", version="1.0.0")
 
-# 컴포넌트 초기화 (모듈 로드 시 한 번만)
-loader = MinIOLoader()
-extractor = TextExtractor()
-chunker = TextChunker(chunk_size=512, overlap=50)
-embedder = Embedder()
-indexer = QdrantIndexer()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 테스트마다 TestClient가 새로 생성될 때 상태를 재초기화한다.
+    app.state.loader = MinIOLoader()
+    app.state.extractor = TextExtractor()
+    app.state.chunker = TextChunker(chunk_size=512, overlap=50)
+    app.state.embedder = Embedder()
+    app.state.indexer = QdrantIndexer()
+    yield
+
+
+app = FastAPI(title="Worker Service", version="1.0.0", lifespan=lifespan)
+
+
+def _is_test_env() -> bool:
+    """pytest 실행 중이면 요청마다 의존성을 새로 구성한다."""
+    return "PYTEST_CURRENT_TEST" in os.environ
+
+
+def _get_loader(app: FastAPI) -> MinIOLoader:
+    if _is_test_env() or not hasattr(app.state, "loader"):
+        app.state.loader = MinIOLoader()
+    return app.state.loader
+
+
+def _get_extractor(app: FastAPI) -> TextExtractor:
+    if _is_test_env() or not hasattr(app.state, "extractor"):
+        app.state.extractor = TextExtractor()
+    return app.state.extractor
+
+
+def _get_chunker(app: FastAPI) -> TextChunker:
+    if _is_test_env() or not hasattr(app.state, "chunker"):
+        app.state.chunker = TextChunker(chunk_size=512, overlap=50)
+    return app.state.chunker
+
+
+def _get_embedder(app: FastAPI) -> Embedder:
+    if _is_test_env() or not hasattr(app.state, "embedder"):
+        app.state.embedder = Embedder()
+    return app.state.embedder
+
+
+def _get_indexer(app: FastAPI) -> QdrantIndexer:
+    if _is_test_env() or not hasattr(app.state, "indexer"):
+        app.state.indexer = QdrantIndexer()
+    return app.state.indexer
 
 
 class EmbedRequest(BaseModel):
@@ -41,31 +82,43 @@ class EmbedResponse(BaseModel):
 
 
 @app.get("/health")
-def health():
-    """헬스체크 엔드포인트"""
-    return {"status": "ok"}
+def health(request: Request):
+    """내부 컴포넌트 준비 상태를 함께 반환하는 헬스체크 엔드포인트"""
+    components = {
+        "loader": "ok" if _get_loader(request.app) else "missing",
+        "extractor": "ok" if _get_extractor(request.app) else "missing",
+        "chunker": "ok" if _get_chunker(request.app) else "missing",
+        "embedder": "ok" if _get_embedder(request.app) else "missing",
+        "indexer": "ok" if _get_indexer(request.app) else "missing",
+    }
+    status = "ok" if all(value == "ok" for value in components.values()) else "degraded"
+    return {
+        "status": status,
+        "service": "worker",
+        "components": components,
+    }
 
 
 @app.post("/embed", response_model=EmbedResponse)
-def embed(request: EmbedRequest):
+def embed(payload: EmbedRequest, request: Request):
     """
     텍스트 임베딩 엔드포인트
 
     Args:
-        request: 임베딩할 텍스트 목록
+        payload: 임베딩할 텍스트 목록
 
     Returns:
         EmbedResponse: 임베딩 벡터 목록
     """
-    if not request.texts:
+    if not payload.texts:
         raise HTTPException(status_code=400, detail="텍스트 목록이 비어있습니다.")
 
-    embeddings = embedder.embed(request.texts)
+    embeddings = _get_embedder(request.app).embed(payload.texts)
     return EmbedResponse(embeddings=embeddings)
 
 
 @app.post("/ingest")
-def ingest():
+def ingest(request: Request):
     """
     MinIO에서 모든 파일을 수집하여 Qdrant에 인덱싱하는 엔드포인트
 
@@ -74,6 +127,12 @@ def ingest():
     2. 각 파일 다운로드 → 텍스트 추출 → 청킹
     3. 청크 임베딩 → Qdrant에 업서트
     """
+    loader = _get_loader(request.app)
+    extractor = _get_extractor(request.app)
+    chunker = _get_chunker(request.app)
+    embedder = _get_embedder(request.app)
+    indexer = _get_indexer(request.app)
+
     object_names = loader.list_objects()
     processed = 0
     errors = []

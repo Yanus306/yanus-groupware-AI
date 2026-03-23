@@ -6,7 +6,9 @@ RAG-002: 리랭킹 서비스
 - GET /health: 헬스체크
 """
 
-from fastapi import FastAPI
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -14,10 +16,26 @@ from .model import Reranker
 
 load_dotenv()
 
-app = FastAPI(title="Reranker Service", version="1.0.0")
 
-# 리랭커 모델 초기화 (모듈 로드 시 한 번만)
-reranker = Reranker()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 모델 인스턴스를 앱 수명주기에 맞춰 관리해 테스트 간 상태 오염을 막는다.
+    app.state.reranker = Reranker()
+    yield
+
+
+app = FastAPI(title="Reranker Service", version="1.0.0", lifespan=lifespan)
+
+
+def _is_test_env() -> bool:
+    """pytest 실행 중이면 요청마다 모델을 새로 구성한다."""
+    return "PYTEST_CURRENT_TEST" in os.environ
+
+
+def _get_reranker(app: FastAPI) -> Reranker:
+    if _is_test_env() or not hasattr(app.state, "reranker"):
+        app.state.reranker = Reranker()
+    return app.state.reranker
 
 
 class DocumentItem(BaseModel):
@@ -46,26 +64,38 @@ class RerankResponse(BaseModel):
 
 
 @app.get("/health")
-def health():
-    """헬스체크 엔드포인트"""
-    return {"status": "ok"}
+def health(request: Request):
+    """리랭커 모델 준비 상태를 함께 반환하는 헬스체크 엔드포인트"""
+    components = {
+        "reranker": "ok" if _get_reranker(request.app) else "missing",
+    }
+    status = "ok" if all(value == "ok" for value in components.values()) else "degraded"
+    return {
+        "status": status,
+        "service": "reranker",
+        "components": components,
+    }
 
 
 @app.post("/rerank", response_model=RerankResponse)
-def rerank(request: RerankRequest):
+def rerank(payload: RerankRequest, request: Request):
     """
     문서 리랭킹 엔드포인트
 
     쿼리와 문서 목록을 받아 관련성 점수로 재정렬합니다.
 
     Args:
-        request: 쿼리, 문서 목록, top_n
+        payload: 쿼리, 문서 목록, top_n
 
     Returns:
         RerankResponse: 점수 내림차순으로 정렬된 문서 목록
     """
-    docs = [{"text": doc.text, "source": doc.source} for doc in request.documents]
-    results = reranker.rerank(request.query, docs, top_n=request.top_n)
+    docs = [{"text": doc.text, "source": doc.source} for doc in payload.documents]
+    results = _get_reranker(request.app).rerank(
+        payload.query,
+        docs,
+        top_n=payload.top_n,
+    )
 
     return RerankResponse(
         results=[

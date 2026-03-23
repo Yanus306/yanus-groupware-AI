@@ -16,14 +16,32 @@ from fastapi.testclient import TestClient
 class TestSearchAPI:
     """검색 API 엔드포인트 테스트"""
 
-    def test_health_endpoint(self):
+    @patch("services.gateway.app.main.httpx.AsyncClient")
+    @patch("services.gateway.app.main.create_qdrant_client")
+    def test_health_endpoint(self, mock_qdrant_factory, mock_httpx_cls):
         """GET /health 엔드포인트 테스트"""
         from services.gateway.app.main import app
+
+        mock_client = AsyncMock()
+        mock_httpx_cls.return_value.__aenter__.return_value = mock_client
+
+        worker_resp = MagicMock()
+        worker_resp.raise_for_status = MagicMock()
+        reranker_resp = MagicMock()
+        reranker_resp.raise_for_status = MagicMock()
+        vllm_resp = MagicMock()
+        vllm_resp.raise_for_status = MagicMock()
+        mock_client.get.side_effect = [worker_resp, reranker_resp, vllm_resp]
+
+        mock_qdrant = MagicMock()
+        mock_qdrant_factory.return_value = mock_qdrant
+        mock_qdrant.get_collections.return_value = MagicMock()
+
         client = TestClient(app)
         response = client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.json()["status"] == "ok"
 
     @patch("services.gateway.app.routers.search.httpx.AsyncClient")
     @patch("services.gateway.app.routers.search.QdrantClient")
