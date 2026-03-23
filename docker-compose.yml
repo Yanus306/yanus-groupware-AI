@@ -17,6 +17,8 @@ services:
     env_file: .env
     environment:
       CUDA_VISIBLE_DEVICES: "1"
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
     depends_on:
       qdrant:
         condition: service_started
@@ -32,6 +34,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 5m
 
   reranker:
     build: ./services/reranker
@@ -40,6 +43,8 @@ services:
       - "8002:8002"
     environment:
       CUDA_VISIBLE_DEVICES: "1"
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -52,6 +57,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 5m
 
   gateway:
     build: ./services/gateway
