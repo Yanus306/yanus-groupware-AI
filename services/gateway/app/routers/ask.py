@@ -12,14 +12,21 @@ RAG-003: 질의응답 API 구현
 5. 답변과 출처 반환
 """
 
+from types import SimpleNamespace
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import httpx
+from httpx import AsyncClient, HTTPStatusError, RequestError
 
 from ..config import settings
 from . import search as search_router
 
 router = APIRouter()
+
+httpx = SimpleNamespace(
+    AsyncClient=AsyncClient,
+    HTTPStatusError=HTTPStatusError,
+    RequestError=RequestError,
+)
 
 
 class AskRequest(BaseModel):
@@ -82,13 +89,8 @@ async def ask(request: AskRequest):
     Returns:
         AskResponse: 생성된 답변 및 출처 목록
     """
-    # 1. 검색 (search 라우터의 로직 재사용)
-    search_req = search_router.SearchRequest(
-        query=request.query,
-        top_k=request.top_k,
-    )
-    search_resp = await search_router.search(search_req)
-    search_results = search_resp.results
+    # 1. 검색 로직 재사용
+    search_results = await search_router.search_documents(request.query, request.top_k)
 
     async with httpx.AsyncClient() as client:
         # 2. 리랭킹

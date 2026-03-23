@@ -1,4 +1,4 @@
 pytest==8.1.1
-minio==7.2.7
-qdrant-client==1.9.1
-python-dotenv==1.0.1
+-r services/worker/requirements.txt
+-r services/reranker/requirements.txt
+-r services/gateway/requirements.txt

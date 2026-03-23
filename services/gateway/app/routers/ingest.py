@@ -5,12 +5,19 @@ RAG-003: 인덱싱 트리거 API 구현
 - POST /ingest/reindex: worker 서비스의 /ingest를 호출하여 재인덱싱
 """
 
+from types import SimpleNamespace
 from fastapi import APIRouter, HTTPException
-import httpx
+from httpx import AsyncClient, HTTPStatusError, RequestError
 
 from ..config import settings
 
 router = APIRouter()
+
+httpx = SimpleNamespace(
+    AsyncClient=AsyncClient,
+    HTTPStatusError=HTTPStatusError,
+    RequestError=RequestError,
+)
 
 
 @router.post("/ingest/reindex")
