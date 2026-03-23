@@ -1,25 +1,5 @@
 services:
 
-  minio:
-    image: minio/minio:latest
-    container_name: rag-minio
-    ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web Console
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - rag-network
-
   qdrant:
     image: qdrant/qdrant:latest
     container_name: rag-qdrant
@@ -33,13 +13,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - rag-network
 
 volumes:
-  minio-data:
   qdrant-data:
-
-networks:
-  rag-network:
-    driver: bridge
