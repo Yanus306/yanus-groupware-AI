@@ -8,11 +8,6 @@ services:
       - "6334:6334"   # gRPC
     volumes:
       - qdrant-data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   worker:
     build: ./services/worker
@@ -24,7 +19,7 @@ services:
       CUDA_VISIBLE_DEVICES: "1"
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         reservations:
@@ -71,7 +66,7 @@ services:
       QDRANT_HOST: qdrant
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
       worker:
         condition: service_healthy
       reranker:
@@ -91,7 +86,7 @@ services:
       - "8080:8080"
     environment:
       CUDA_VISIBLE_DEVICES: "0"
-    command: ["--model", "Qwen/Qwen2.5-7B-Instruct", "--port", "8080"]
+    command: ["--model", "${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}", "--port", "8080"]
     deploy:
       resources:
         reservations:
