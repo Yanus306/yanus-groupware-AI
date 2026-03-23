@@ -14,5 +14,94 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build: ./services/worker
+    container_name: rag-worker
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  reranker:
+    build: ./services/reranker
+    container_name: rag-reranker
+    ports:
+      - "8002:8002"
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build: ./services/gateway
+    container_name: rag-gateway
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      WORKER_URL: http://worker:8001
+      RERANKER_URL: http://reranker:8002
+      VLLM_URL: http://vllm:8080
+      QDRANT_HOST: qdrant
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
+      vllm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: rag-vllm
+    ports:
+      - "8080:8080"
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+    command: ["--model", "Qwen/Qwen2.5-7B-Instruct", "--port", "8080"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+
 volumes:
   qdrant-data:
+  huggingface-cache:
