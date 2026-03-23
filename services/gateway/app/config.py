@@ -27,10 +27,10 @@ class Settings:
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
 
     # Qdrant 컬렉션
-    QDRANT_COLLECTION: str = "documents"
+    QDRANT_COLLECTION: str = os.getenv("QDRANT_COLLECTION", "documents")
 
     # vLLM 모델명
-    VLLM_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
+    VLLM_MODEL: str = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
 
 
 settings = Settings()
