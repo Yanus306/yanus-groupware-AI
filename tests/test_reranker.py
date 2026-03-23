@@ -123,7 +123,10 @@ class TestRerankerAPI:
         response = client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["service"] == "reranker"
+        assert data["components"]["reranker"] == "ok"
 
     @patch("services.reranker.app.model.CrossEncoder")
     def test_rerank_endpoint_returns_results(self, mock_ce_cls):
