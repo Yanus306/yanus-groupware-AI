@@ -27,7 +27,7 @@ class TestGatewayConfig:
         assert reloaded.settings.QDRANT_HOST == "localhost"
         assert reloaded.settings.QDRANT_PORT == 6333
         assert reloaded.settings.QDRANT_COLLECTION == "documents"
-        assert reloaded.settings.VLLM_MODEL == "Qwen/Qwen2.5-7B-Instruct"
+        assert reloaded.settings.VLLM_MODEL == "Qwen/Qwen3.5-9B"
 
     def test_settings_read_environment_overrides(self):
         """환경변수 값으로 gateway 설정을 덮어써야 한다."""
