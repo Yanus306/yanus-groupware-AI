@@ -340,7 +340,14 @@ class TestWorkerAPI:
         response = client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["service"] == "worker"
+        assert data["components"]["loader"] == "ok"
+        assert data["components"]["extractor"] == "ok"
+        assert data["components"]["chunker"] == "ok"
+        assert data["components"]["embedder"] == "ok"
+        assert data["components"]["indexer"] == "ok"
 
     @patch("services.worker.app.embedder.SentenceTransformer")
     @patch("services.worker.app.indexer.QdrantClient")

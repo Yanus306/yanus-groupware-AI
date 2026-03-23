@@ -82,9 +82,21 @@ class EmbedResponse(BaseModel):
 
 
 @app.get("/health")
-def health():
-    """헬스체크 엔드포인트"""
-    return {"status": "ok"}
+def health(request: Request):
+    """내부 컴포넌트 준비 상태를 함께 반환하는 헬스체크 엔드포인트"""
+    components = {
+        "loader": "ok" if _get_loader(request.app) else "missing",
+        "extractor": "ok" if _get_extractor(request.app) else "missing",
+        "chunker": "ok" if _get_chunker(request.app) else "missing",
+        "embedder": "ok" if _get_embedder(request.app) else "missing",
+        "indexer": "ok" if _get_indexer(request.app) else "missing",
+    }
+    status = "ok" if all(value == "ok" for value in components.values()) else "degraded"
+    return {
+        "status": status,
+        "service": "worker",
+        "components": components,
+    }
 
 
 @app.post("/embed", response_model=EmbedResponse)
