@@ -268,11 +268,65 @@ class TestGatewayIngestAPI:
 class TestGatewayHealth:
     """Gateway 헬스체크 테스트"""
 
-    def test_health_endpoint(self):
-        """GET /health 엔드포인트 테스트"""
+    @patch("services.gateway.app.main.httpx.AsyncClient")
+    @patch("services.gateway.app.main.create_qdrant_client")
+    def test_health_endpoint_reports_dependency_statuses(
+        self,
+        mock_qdrant_factory,
+        mock_httpx_cls,
+    ):
+        """GET /health가 의존 서비스 상태를 상세히 반환하는지 테스트"""
         from services.gateway.app.main import app
+
+        mock_client = AsyncMock()
+        mock_httpx_cls.return_value.__aenter__.return_value = mock_client
+
+        worker_resp = MagicMock()
+        worker_resp.raise_for_status = MagicMock()
+        reranker_resp = MagicMock()
+        reranker_resp.raise_for_status = MagicMock()
+        vllm_resp = MagicMock()
+        vllm_resp.raise_for_status = MagicMock()
+        mock_client.get.side_effect = [worker_resp, reranker_resp, vllm_resp]
+
+        mock_qdrant = MagicMock()
+        mock_qdrant_factory.return_value = mock_qdrant
+        mock_qdrant.get_collections.return_value = MagicMock()
+
         client = TestClient(app)
         response = client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["services"]["worker"]["status"] == "ok"
+        assert data["services"]["reranker"]["status"] == "ok"
+        assert data["services"]["vllm"]["status"] == "ok"
+        assert data["services"]["qdrant"]["status"] == "ok"
+
+    @patch("services.gateway.app.main.httpx.AsyncClient")
+    @patch("services.gateway.app.main.create_qdrant_client")
+    def test_health_endpoint_returns_503_when_dependency_fails(
+        self,
+        mock_qdrant_factory,
+        mock_httpx_cls,
+    ):
+        """GET /health가 의존 서비스 장애 시 503을 반환하는지 테스트"""
+        import httpx
+        from services.gateway.app.main import app
+
+        mock_client = AsyncMock()
+        mock_httpx_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.RequestError("worker down")
+
+        mock_qdrant = MagicMock()
+        mock_qdrant_factory.return_value = mock_qdrant
+        mock_qdrant.get_collections.return_value = MagicMock()
+
+        client = TestClient(app)
+        response = client.get("/health")
+
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert data["services"]["worker"]["status"] == "error"
