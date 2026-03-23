@@ -41,7 +41,7 @@ class TestComposeRuntimeConfig:
         vllm_command = compose["services"]["vllm"]["command"]
 
         assert vllm_command[0] == "--model"
-        assert vllm_command[1] == "${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+        assert vllm_command[1] == "${VLLM_MODEL:-Qwen/Qwen3.5-9B}"
 
     def test_model_services_have_healthcheck_start_period(self):
         compose = _load_compose()
