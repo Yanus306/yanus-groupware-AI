@@ -32,6 +32,9 @@ python -m pytest tests/ -v --ignore=tests/test_infra.py
 
 `tests/test_infra.py`는 실제 MinIO/Qdrant 연결이 필요할 때만 별도로 실행합니다.
 
+## Troubleshooting
+- 운영/로컬 실행 중 자주 만나는 이슈는 [docs/troubleshooting.md](docs/troubleshooting.md)에 정리되어 있습니다.
+
 ## Workflow
 - 기능 작업은 이슈 생성 후 `dev` 기준 브랜치에서 진행합니다.
 - 커밋은 `test -> feat/fix -> refactor` 순서를 유지합니다.
