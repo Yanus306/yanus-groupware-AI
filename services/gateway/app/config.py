@@ -30,7 +30,7 @@ class Settings:
     QDRANT_COLLECTION: str = os.getenv("QDRANT_COLLECTION", "documents")
 
     # vLLM 모델명
-    VLLM_MODEL: str = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+    VLLM_MODEL: str = os.getenv("VLLM_MODEL", "Qwen/Qwen3.5-9B")
 
 
 settings = Settings()
