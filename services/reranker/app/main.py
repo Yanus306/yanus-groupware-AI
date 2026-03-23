@@ -64,9 +64,17 @@ class RerankResponse(BaseModel):
 
 
 @app.get("/health")
-def health():
-    """헬스체크 엔드포인트"""
-    return {"status": "ok"}
+def health(request: Request):
+    """리랭커 모델 준비 상태를 함께 반환하는 헬스체크 엔드포인트"""
+    components = {
+        "reranker": "ok" if _get_reranker(request.app) else "missing",
+    }
+    status = "ok" if all(value == "ok" for value in components.values()) else "degraded"
+    return {
+        "status": status,
+        "service": "reranker",
+        "components": components,
+    }
 
 
 @app.post("/rerank", response_model=RerankResponse)
