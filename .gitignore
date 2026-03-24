@@ -7,3 +7,4 @@ MY-PLAN.md
 __pycache__/
 .pytest_cache/
 *.py[cod]
+models
